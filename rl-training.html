@@ -1,0 +1,889 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>DQN Drone Training</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link
+        href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;600&family=Outfit:wght@400;600;700&display=swap"
+        rel="stylesheet" />
+    <style>
+        *,
+        *::before,
+        *::after {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box
+        }
+
+        :root {
+            --bg: #050c17;
+            --pb: rgba(5, 12, 24, 0.88);
+            --bdr: rgba(56, 189, 248, 0.18);
+            --ac: #38bdf8;
+            --ac2: #818cf8;
+            --gn: #34d399;
+            --rd: #f87171;
+            --yw: #fbbf24;
+            --or: #fb923c;
+            --tx: #e2e8f0;
+            --mt: rgba(148, 163, 184, 0.55);
+            --mono: 'JetBrains Mono', monospace;
+            --sans: 'Outfit', sans-serif;
+        }
+
+        body {
+            background: var(--bg);
+            color: var(--tx);
+            font-family: var(--sans);
+            overflow: hidden;
+            width: 100vw;
+            height: 100vh
+        }
+
+        #canvas-wrap {
+            position: fixed;
+            inset: 0;
+            z-index: 0
+        }
+
+        canvas {
+            display: block
+        }
+
+        #hud {
+            position: fixed;
+            inset: 0;
+            z-index: 10;
+            pointer-events: none
+        }
+
+        /* Top bar */
+        #topbar {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            padding: 10px 18px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            background: linear-gradient(to bottom, rgba(5, 12, 23, 0.97), transparent);
+        }
+
+        .tl {
+            display: flex;
+            align-items: center;
+            gap: 10px
+        }
+
+        .tt {
+            font-size: 14px;
+            font-weight: 700;
+            color: var(--ac)
+        }
+
+        .ts {
+            font-size: 9px;
+            color: var(--mt);
+            font-family: var(--mono);
+            letter-spacing: 1.5px;
+            margin-top: 1px
+        }
+
+        .pill {
+            font-size: 10px;
+            font-family: var(--mono);
+            padding: 3px 12px;
+            border-radius: 20px;
+            display: flex;
+            align-items: center;
+            gap: 5px
+        }
+
+        .pg {
+            color: var(--gn);
+            background: rgba(52, 211, 153, .1);
+            border: 1px solid rgba(52, 211, 153, .3)
+        }
+
+        .pb {
+            color: var(--ac);
+            background: rgba(56, 189, 248, .1);
+            border: 1px solid rgba(56, 189, 248, .25)
+        }
+
+        .py {
+            color: var(--yw);
+            background: rgba(251, 191, 36, .1);
+            border: 1px solid rgba(251, 191, 36, .25)
+        }
+
+        .dot {
+            width: 5px;
+            height: 5px;
+            border-radius: 50%;
+            background: currentColor;
+            animation: blink 1.2s ease infinite
+        }
+
+        @keyframes blink {
+
+            0%,
+            100% {
+                opacity: 1
+            }
+
+            50% {
+                opacity: .2
+            }
+        }
+
+        /* Panel base */
+        .panel {
+            position: absolute;
+            background: var(--pb);
+            border: 1px solid var(--bdr);
+            border-radius: 11px;
+            padding: 11px 13px;
+            backdrop-filter: blur(18px);
+        }
+
+        .pt {
+            font-size: 8.5px;
+            font-family: var(--mono);
+            font-weight: 600;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            color: var(--ac);
+            margin-bottom: 9px;
+            padding-bottom: 6px;
+            border-bottom: 1px solid var(--bdr)
+        }
+
+        .row {
+            display: flex;
+            justify-content: space-between;
+            align-items: baseline;
+            margin-bottom: 4px
+        }
+
+        .lbl {
+            font-size: 9.5px;
+            color: var(--mt);
+            font-family: var(--mono)
+        }
+
+        .val {
+            font-size: 11px;
+            font-family: var(--mono);
+            font-weight: 600;
+            color: var(--tx)
+        }
+
+        .ac {
+            color: var(--ac)
+        }
+
+        .gn {
+            color: var(--gn)
+        }
+
+        .yw {
+            color: var(--yw)
+        }
+
+        .rd {
+            color: var(--rd)
+        }
+
+        /* ── Left panel: Training stats ── */
+        #p-train {
+            top: 58px;
+            left: 14px;
+            width: 210px
+        }
+
+        /* Epsilon bar */
+        .bar-wrap {
+            width: 100%;
+            height: 5px;
+            background: rgba(56, 189, 248, .1);
+            border-radius: 3px;
+            overflow: hidden;
+            margin-top: 2px;
+            margin-bottom: 8px
+        }
+
+        .bar-fill {
+            height: 100%;
+            border-radius: 3px;
+            transition: width .1s
+        }
+
+        .bf-eps {
+            background: linear-gradient(to right, #38bdf8, #818cf8)
+        }
+
+        .bf-buf {
+            background: linear-gradient(to right, #34d399, #38bdf8)
+        }
+
+        .bf-m {
+            background: var(--gn);
+            transition: width .05s, background .05s
+        }
+
+        /* ── Center: Q-value panel ── */
+        #p-q {
+            top: 58px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 260px
+        }
+
+        .q-action-row {
+            display: flex;
+            align-items: center;
+            gap: 7px;
+            margin-bottom: 4px
+        }
+
+        .q-label {
+            font-size: 9px;
+            font-family: var(--mono);
+            color: var(--mt);
+            width: 32px;
+            text-align: right;
+            flex-shrink: 0
+        }
+
+        .q-bar-bg {
+            flex: 1;
+            height: 7px;
+            background: rgba(56, 189, 248, .08);
+            border-radius: 4px;
+            overflow: hidden
+        }
+
+        .q-bar {
+            height: 100%;
+            width: 0%;
+            border-radius: 4px;
+            background: #818cf8;
+            transition: width .12s, background .12s
+        }
+
+        .q-val {
+            font-size: 9px;
+            font-family: var(--mono);
+            color: var(--mt);
+            width: 42px;
+            text-align: right
+        }
+
+        /* ── Right panel: Telemetry / Motor ── */
+        #p-telem {
+            top: 58px;
+            right: 14px;
+            width: 206px
+        }
+
+        .xyz-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr;
+            gap: 3px;
+            margin-bottom: 6px
+        }
+
+        .xyz-cell {
+            text-align: center;
+            background: rgba(56, 189, 248, .04);
+            border: 1px solid rgba(56, 189, 248, .08);
+            border-radius: 5px;
+            padding: 3px 4px
+        }
+
+        .xl {
+            font-size: 8px;
+            color: var(--mt);
+            font-family: var(--mono)
+        }
+
+        .xv {
+            font-size: 10px;
+            font-family: var(--mono);
+            font-weight: 600
+        }
+
+        /* Motor bars */
+        .motor-row {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            margin-bottom: 5px
+        }
+
+        .ml {
+            font-size: 9px;
+            font-family: var(--mono);
+            color: var(--mt);
+            width: 26px
+        }
+
+        .mb-bg {
+            flex: 1;
+            height: 5px;
+            background: rgba(56, 189, 248, .1);
+            border-radius: 3px;
+            overflow: hidden
+        }
+
+        .mv {
+            font-size: 9px;
+            font-family: var(--mono);
+            color: var(--tx);
+            width: 30px;
+            text-align: right
+        }
+
+        /* ── Charts: bottom-center ── */
+        #p-charts {
+            bottom: 80px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 500px;
+            display: flex;
+            gap: 10px
+        }
+
+        .chart-box {
+            flex: 1
+        }
+
+        .chart-title {
+            font-size: 8px;
+            font-family: var(--mono);
+            color: var(--mt);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 4px;
+            text-align: center
+        }
+
+        canvas.sparkline {
+            display: block;
+            width: 100%;
+            height: 50px;
+            border-radius: 6px;
+            background: rgba(0, 0, 0, 0.4);
+            border: 1px solid var(--bdr)
+        }
+
+        /* ── Bottom-left: Controls ── */
+        #p-ctrl {
+            bottom: 80px;
+            left: 14px;
+            width: 210px
+        }
+
+        .ctrl-btn {
+            width: 100%;
+            margin-bottom: 5px;
+            padding: 7px 12px;
+            border-radius: 8px;
+            font-family: var(--sans);
+            font-size: 11px;
+            font-weight: 600;
+            cursor: pointer;
+            border: 1px solid var(--bdr);
+            background: var(--pb);
+            color: var(--tx);
+            pointer-events: all;
+            transition: all .16s;
+            display: flex;
+            align-items: center;
+            gap: 7px;
+        }
+
+        .ctrl-btn:hover {
+            border-color: var(--ac);
+            color: var(--ac);
+            transform: translateY(-1px)
+        }
+
+        .ctrl-btn.danger:hover {
+            border-color: var(--rd);
+            color: var(--rd)
+        }
+
+        .ctrl-btn.success:hover {
+            border-color: var(--gn);
+            color: var(--gn)
+        }
+
+        /* Target altitude slider */
+        .slider-wrap {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-top: 6px
+        }
+
+        .slider-wrap input {
+            flex: 1;
+            accent-color: var(--ac)
+        }
+
+        .slider-label {
+            font-size: 10px;
+            font-family: var(--mono);
+            color: var(--mt)
+        }
+
+        #target-alt-val {
+            font-size: 11px;
+            font-family: var(--mono);
+            color: var(--ac);
+            font-weight: 600
+        }
+
+        /* ── Bottom-right: Episode stats ── */
+        #p-episode {
+            bottom: 80px;
+            right: 14px;
+            width: 190px
+        }
+
+        #ep-reward-big {
+            font-size: 22px;
+            font-family: var(--mono);
+            font-weight: 600;
+            color: var(--ac)
+        }
+
+        #ep-reward-sub {
+            font-size: 9px;
+            font-family: var(--mono);
+            color: var(--mt);
+            margin-top: 1px;
+            margin-bottom: 8px
+        }
+
+        /* ── Kbd legend ── */
+        #p-kbd {
+            bottom: 24px;
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 9.5px;
+            font-family: var(--mono);
+            color: var(--mt);
+            text-align: center;
+            white-space: nowrap;
+            background: none;
+            border: none;
+            padding: 0
+        }
+
+        #p-kbd span {
+            color: var(--ac);
+            font-weight: 600
+        }
+
+        /* Status center-top */
+        #p-status {
+            top: 58px;
+            left: 50%;
+            transform: translateX(-50%) translateX(0px);
+            white-space: nowrap;
+            text-align: center;
+            margin-left: 220px
+        }
+
+        #warmup-status {
+            font-size: 12px;
+            font-family: var(--mono);
+            font-weight: 600
+        }
+
+        .action-badge {
+            font-size: 10px;
+            font-family: var(--mono);
+            color: var(--ac2);
+            margin-top: 2px
+        }
+
+        .cam-badge {
+            font-size: 10px;
+            font-family: var(--mono);
+            color: var(--mt);
+            margin-top: 2px
+        }
+
+        /* Toast */
+        #toast {
+            position: fixed;
+            bottom: 100px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(52, 211, 153, .15);
+            border: 1px solid rgba(52, 211, 153, .4);
+            color: var(--gn);
+            font-family: var(--mono);
+            font-size: 12px;
+            padding: 6px 18px;
+            border-radius: 20px;
+            opacity: 0;
+            transition: opacity .3s;
+            pointer-events: none;
+            z-index: 999;
+        }
+    </style>
+</head>
+
+<body>
+    <div id="canvas-wrap"></div>
+    <div id="hud">
+
+        <!-- Top bar -->
+        <div id="topbar">
+            <div class="tl">
+                <div>
+                    <div class="tt">DQN Drone Training</div>
+                    <div class="ts">16-STATE · 17-ACTION · 256-256-128-64 NETWORK · STAGED AUTONOMOUS FLIGHT</div>
+                </div>
+            </div>
+            <div style="display:flex;gap:8px;align-items:center">
+                <div class="pill py">ε-greedy exploration</div>
+                <div class="pill pb">γ = 0.995 | lr = 0.0005</div>
+                <div class="pill pg">
+                    <div class="dot"></div><span id="rl-fps">60</span> FPS
+                </div>
+            </div>
+        </div>
+
+        <!-- Left: Training metrics -->
+        <div class="panel" id="p-train">
+            <div class="pt">Training Metrics</div>
+
+            <div class="row"><span class="lbl">Episode</span><span class="val ac" id="rl-episode">0</span></div>
+            <div class="row"><span class="lbl">Env Steps</span><span class="val" id="rl-steps">0</span></div>
+            <div class="row"><span class="lbl">Train Steps</span><span class="val" id="rl-train-steps">0</span></div>
+
+            <div style="height:1px;background:var(--bdr);margin:7px 0"></div>
+
+            <div class="row"><span class="lbl">ε (Epsilon)</span><span class="val ac" id="rl-epsilon">1.0000</span>
+            </div>
+            <div class="bar-wrap">
+                <div class="bar-fill bf-eps" id="rl-eps-bar" style="width:100%"></div>
+            </div>
+
+            <div class="row"><span class="lbl">Loss (Huber)</span><span class="val yw" id="rl-loss">—</span></div>
+            <div class="row"><span class="lbl">Ep. Reward</span><span class="val gn" id="rl-reward">0.00</span></div>
+            <div class="row"><span class="lbl">Avg Reward (50)</span><span class="val" id="rl-avg-reward">0.00</span>
+            </div>
+
+            <div style="height:1px;background:var(--bdr);margin:7px 0"></div>
+
+            <div class="row"><span class="lbl">Buffer</span><span class="val" id="rl-buf-size">0</span></div>
+            <div class="bar-wrap">
+                <div class="bar-fill bf-buf" id="rl-buf-bar" style="width:0%"></div>
+            </div>
+
+            <div id="rl-warmup"
+                style="font-size:10px;font-family:var(--mono);color:var(--yw);text-align:center;margin-top:4px">
+                Warmup… 0/500
+            </div>
+
+            <div style="height:1px;background:var(--bdr);margin:7px 0"></div>
+
+            <div class="row"><span class="lbl">Hyperparams</span></div>
+            <div class="row"><span class="lbl">Batch size</span><span class="val">128</span></div>
+            <div class="row"><span class="lbl">Buffer cap.</span><span class="val">200,000</span></div>
+            <div class="row"><span class="lbl">Target sync</span><span class="val">500 steps</span></div>
+            <div class="row"><span class="lbl">ε decay</span><span class="val">×0.9992/step</span></div>
+        </div>
+
+        <!-- Center: Q-Values -->
+        <div class="panel" id="p-q">
+            <div class="pt">Q-Values (current state)</div>
+            <div id="rl-warmup2"
+                style="font-size:10px;text-align:center;color:var(--mt);font-family:var(--mono);margin-bottom:6px">
+                Selected action: <b id="rl-action" style="color:var(--ac)">—</b>
+            </div>
+
+            <div class="q-action-row"><span class="q-label">ALL↑</span>
+                <div class="q-bar-bg">
+                    <div class="q-bar" id="q-bar-0"></div>
+                </div><span class="q-val" id="q-val-0">—</span>
+            </div>
+            <div class="q-action-row"><span class="q-label">ALL↓</span>
+                <div class="q-bar-bg">
+                    <div class="q-bar" id="q-bar-1"></div>
+                </div><span class="q-val" id="q-val-1">—</span>
+            </div>
+            <div class="q-action-row"><span class="q-label">Pitch+</span>
+                <div class="q-bar-bg">
+                    <div class="q-bar" id="q-bar-2"></div>
+                </div><span class="q-val" id="q-val-2">—</span>
+            </div>
+            <div class="q-action-row"><span class="q-label">Pitch-</span>
+                <div class="q-bar-bg">
+                    <div class="q-bar" id="q-bar-3"></div>
+                </div><span class="q-val" id="q-val-3">—</span>
+            </div>
+            <div class="q-action-row"><span class="q-label">Roll+</span>
+                <div class="q-bar-bg">
+                    <div class="q-bar" id="q-bar-4"></div>
+                </div><span class="q-val" id="q-val-4">—</span>
+            </div>
+            <div class="q-action-row"><span class="q-label">Roll-</span>
+                <div class="q-bar-bg">
+                    <div class="q-bar" id="q-bar-5"></div>
+                </div><span class="q-val" id="q-val-5">—</span>
+            </div>
+            <div class="q-action-row"><span class="q-label">Yaw CW</span>
+                <div class="q-bar-bg">
+                    <div class="q-bar" id="q-bar-6"></div>
+                </div><span class="q-val" id="q-val-6">—</span>
+            </div>
+            <div class="q-action-row"><span class="q-label">YawCCW</span>
+                <div class="q-bar-bg">
+                    <div class="q-bar" id="q-bar-7"></div>
+                </div><span class="q-val" id="q-val-7">—</span>
+            </div>
+            <div class="q-action-row"><span class="q-label">M1↑</span>
+                <div class="q-bar-bg">
+                    <div class="q-bar" id="q-bar-8"></div>
+                </div><span class="q-val" id="q-val-8">—</span>
+            </div>
+            <div class="q-action-row"><span class="q-label">M1↓</span>
+                <div class="q-bar-bg">
+                    <div class="q-bar" id="q-bar-9"></div>
+                </div><span class="q-val" id="q-val-9">—</span>
+            </div>
+            <div class="q-action-row"><span class="q-label">M2↑</span>
+                <div class="q-bar-bg">
+                    <div class="q-bar" id="q-bar-10"></div>
+                </div><span class="q-val" id="q-val-10">—</span>
+            </div>
+            <div class="q-action-row"><span class="q-label">M2↓</span>
+                <div class="q-bar-bg">
+                    <div class="q-bar" id="q-bar-11"></div>
+                </div><span class="q-val" id="q-val-11">—</span>
+            </div>
+            <div class="q-action-row"><span class="q-label">M3↑</span>
+                <div class="q-bar-bg">
+                    <div class="q-bar" id="q-bar-12"></div>
+                </div><span class="q-val" id="q-val-12">—</span>
+            </div>
+            <div class="q-action-row"><span class="q-label">M3↓</span>
+                <div class="q-bar-bg">
+                    <div class="q-bar" id="q-bar-13"></div>
+                </div><span class="q-val" id="q-val-13">—</span>
+            </div>
+            <div class="q-action-row"><span class="q-label">M4↑</span>
+                <div class="q-bar-bg">
+                    <div class="q-bar" id="q-bar-14"></div>
+                </div><span class="q-val" id="q-val-14">—</span>
+            </div>
+            <div class="q-action-row"><span class="q-label">M4↓</span>
+                <div class="q-bar-bg">
+                    <div class="q-bar" id="q-bar-15"></div>
+                </div><span class="q-val" id="q-val-15">—</span>
+            </div>
+            <div class="q-action-row"><span class="q-label" style="color:var(--ac)">Hold</span>
+                <div class="q-bar-bg">
+                    <div class="q-bar" id="q-bar-16"></div>
+                </div><span class="q-val" id="q-val-16">—</span>
+            </div>
+        </div>
+
+        <!-- Right: Telemetry + Motors -->
+        <div class="panel" id="p-telem">
+            <div class="pt">Drone Telemetry</div>
+            <div style="font-size:8.5px;font-family:var(--mono);color:var(--ac2);margin-bottom:4px;letter-spacing:1px">
+                POSITION (m)</div>
+            <div class="xyz-row">
+                <div class="xyz-cell">
+                    <div class="xl">X</div>
+                    <div class="xv" id="rl-px">—</div>
+                </div>
+                <div class="xyz-cell">
+                    <div class="xl">Y</div>
+                    <div class="xv" id="rl-py">—</div>
+                </div>
+                <div class="xyz-cell">
+                    <div class="xl">Z</div>
+                    <div class="xv" id="rl-pz">—</div>
+                </div>
+            </div>
+            <div style="font-size:8.5px;font-family:var(--mono);color:var(--ac2);margin-bottom:4px;letter-spacing:1px">
+                VELOCITY (m/s)</div>
+            <div class="xyz-row">
+                <div class="xyz-cell">
+                    <div class="xl">Vx</div>
+                    <div class="xv" id="rl-vx">—</div>
+                </div>
+                <div class="xyz-cell">
+                    <div class="xl">Vy</div>
+                    <div class="xv" id="rl-vy">—</div>
+                </div>
+                <div class="xyz-cell">
+                    <div class="xl">Vz</div>
+                    <div class="xv" id="rl-vz">—</div>
+                </div>
+            </div>
+            <div style="height:1px;background:var(--bdr);margin:5px 0"></div>
+            <div class="row"><span class="lbl">Altitude</span><span class="val ac" id="rl-alt">0.00 m</span></div>
+            <div class="row"><span class="lbl">Speed</span><span class="val" id="rl-speed">0.0 km/h</span></div>
+            <div class="row"><span class="lbl">Total Thrust</span><span class="val" id="rl-total-t">0.0 N</span></div>
+            <div style="height:1px;background:var(--bdr);margin:5px 0"></div>
+            <div class="pt" style="font-size:8px;margin-bottom:6px;padding-bottom:4px">Motor Thrusts [0–15 N]</div>
+            <div class="motor-row"><span class="ml">M1 FR</span>
+                <div class="mb-bg">
+                    <div class="bar-fill bf-m" id="rl-m1-bar" style="width:0%"></div>
+                </div><span class="mv" id="rl-m1-val">0.0</span>
+            </div>
+            <div class="motor-row"><span class="ml">M2 FL</span>
+                <div class="mb-bg">
+                    <div class="bar-fill bf-m" id="rl-m2-bar" style="width:0%"></div>
+                </div><span class="mv" id="rl-m2-val">0.0</span>
+            </div>
+            <div class="motor-row"><span class="ml">M3 RL</span>
+                <div class="mb-bg">
+                    <div class="bar-fill bf-m" id="rl-m3-bar" style="width:0%"></div>
+                </div><span class="mv" id="rl-m3-val">0.0</span>
+            </div>
+            <div class="motor-row"><span class="ml">M4 RR</span>
+                <div class="mb-bg">
+                    <div class="bar-fill bf-m" id="rl-m4-bar" style="width:0%"></div>
+                </div><span class="mv" id="rl-m4-val">0.0</span>
+            </div>
+            <div style="height:1px;background:var(--bdr);margin:5px 0"></div>
+            <div class="pt" style="font-size:8px;margin-bottom:6px;padding-bottom:4px">Motor Symmetry Balance</div>
+            <div class="motor-row">
+                <span class="ml" style="width:38px">F/R</span>
+                <div class="mb-bg">
+                    <div class="bar-fill bf-m" id="rl-fr-bar" style="width:50%"></div>
+                </div>
+                <span class="mv" id="rl-fr-val" style="color:var(--gn)">OK</span>
+            </div>
+            <div class="motor-row">
+                <span class="ml" style="width:38px">L/R</span>
+                <div class="mb-bg">
+                    <div class="bar-fill bf-m" id="rl-lr-bar" style="width:50%"></div>
+                </div>
+                <span class="mv" id="rl-lr-val" style="color:var(--gn)">OK</span>
+            </div>
+        </div>
+
+        <!-- Charts -->
+        <div id="p-charts">
+            <div class="chart-box">
+                <div class="chart-title">Episode Reward History</div>
+                <canvas class="sparkline" id="reward-chart" width="230" height="50"></canvas>
+            </div>
+            <div class="chart-box">
+                <div class="chart-title">Training Loss (Huber)</div>
+                <canvas class="sparkline" id="loss-chart" width="230" height="50"></canvas>
+            </div>
+        </div>
+
+        <!-- Bottom-left: Controls -->
+        <div class="panel" id="p-ctrl">
+            <div class="pt">Controls</div>
+            <button class="ctrl-btn" id="btn-pause" onclick="toggleTraining()">⏸ Pause Training</button>
+            <button class="ctrl-btn danger" onclick="resetEpisode()">↺ Reset Episode</button>
+            <button class="ctrl-btn success" onclick="saveWeights()">💾 Save Weights</button>
+            <button class="ctrl-btn" onclick="loadWeights()">📂 Load Weights</button>
+            <div class="slider-wrap" style="margin-top:8px">
+                <span class="slider-label">Target Alt:</span>
+                <input type="range" min="1" max="30" value="10" step="0.5" oninput="setTargetAlt(this.value)"
+                    style="flex:1">
+                <span id="target-alt-val">10.0 m</span>
+            </div>
+            <div class="row" style="margin-top:8px">
+                <span class="lbl">Camera</span>
+                <span class="val ac" id="cam-mode">FOLLOW</span>
+            </div>
+        </div>
+
+        <!-- Bottom-right: Episode summary -->
+        <div class="panel" id="p-episode">
+            <div class="pt">Episode Stats</div>
+            <div id="ep-reward-big" class="ac">0.00</div>
+            <div id="ep-reward-sub">current episode reward</div>
+            <div class="row"><span class="lbl">Episode #</span><span class="val" id="ep-num">0</span></div>
+            <div class="row"><span class="lbl">Step in Ep.</span><span class="val" id="ep-step">0</span></div>
+            <div class="row"><span class="lbl">Avg (50 ep)</span><span class="val gn" id="ep-avg">0.00</span></div>
+            <div class="row"><span class="lbl">Best ep.</span><span class="val yw" id="ep-best">0.00</span></div>
+        </div>
+
+        <!-- Keyboard legend -->
+        <div id="p-kbd">
+            <span>T</span> Training on/off &nbsp;·&nbsp;
+            <span>R</span> Reset &nbsp;·&nbsp;
+            <span>C</span> Camera &nbsp;·&nbsp;
+            <span>S</span> Save weights &nbsp;·&nbsp;
+            <span>L</span> Load weights &nbsp;·&nbsp;
+            <span>Scroll</span> Zoom
+        </div>
+
+    </div>
+
+    <div id="toast"></div>
+
+    <!-- Scripts -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.17.0/dist/tf.min.js"></script>
+    <script src="config/cannon.js"></script>
+    <script src="drone/drone.js"></script>
+    <script src="drone/drone-scene.js"></script>
+    <script src="agent/dqn-agent.js"></script>
+    <script src="training/rl-main.js"></script>
+
+    <script>
+        // Patch HUD elements that rl-main uses but this HTML has under different IDs
+        // Sync the two episode badges and extra HUD cells
+        (function () {
+            const loop = () => {
+                if (!window.RL_ENV || !window.AGENT) { requestAnimationFrame(loop); return; }
+                // extra episode panel
+                const ep = document.getElementById('ep-num');
+                const eps = document.getElementById('ep-step');
+                const epA = document.getElementById('ep-avg');
+                const epB = document.getElementById('ep-best');
+                const epR = document.getElementById('ep-reward-big');
+                if (ep) ep.textContent = RL_ENV.episode;
+                if (eps) eps.textContent = RL_ENV.stepInEpisode;
+                if (epA) epA.textContent = RL_ENV.avgReward(50).toFixed(2);
+                const hist = RL_ENV.episodeHistory;
+                if (epB && hist.length) epB.textContent = Math.max(...hist).toFixed(2);
+                if (epR) epR.textContent = RL_ENV.episodeReward.toFixed(2);
+
+                // Position xyz from drone.state
+                const s = DRONE.state;
+                const f = v => v.toFixed(2);
+                ['px', 'py', 'pz'].forEach((id, i) => {
+                    const el = document.getElementById('rl-' + id);
+                    if (el) el.textContent = f([s.position.x, s.position.y, s.position.z][i]);
+                });
+                ['vx', 'vy', 'vz'].forEach((id, i) => {
+                    const el = document.getElementById('rl-' + id);
+                    if (el) el.textContent = f([s.velocity.x, s.velocity.y, s.velocity.z][i]);
+                });
+                // alt in telemetry panel
+                const altEl = document.getElementById('rl-pos-y');
+                if (altEl) altEl.textContent = f(s.position.y) + ' m';
+
+                requestAnimationFrame(loop);
+            };
+            requestAnimationFrame(loop);
+        })();
+    </script>
+</body>
+
+</html>

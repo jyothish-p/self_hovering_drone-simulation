@@ -1,0 +1,679 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Quadcopter Drone Simulation</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link
+        href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;600&family=Outfit:wght@400;600;700&display=swap"
+        rel="stylesheet" />
+    <style>
+        *,
+        *::before,
+        *::after {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            --bg: #060d18;
+            --pb: rgba(6, 14, 26, 0.85);
+            --bdr: rgba(56, 189, 248, 0.18);
+            --ac: #38bdf8;
+            --ac2: #818cf8;
+            --gn: #34d399;
+            --rd: #f87171;
+            --yw: #fbbf24;
+            --tx: #e2e8f0;
+            --mt: rgba(148, 163, 184, 0.55);
+            --mono: 'JetBrains Mono', monospace;
+            --sans: 'Outfit', sans-serif;
+        }
+
+        body {
+            background: var(--bg);
+            color: var(--tx);
+            font-family: var(--sans);
+            overflow: hidden;
+            width: 100vw;
+            height: 100vh;
+        }
+
+        #canvas-wrap {
+            position: fixed;
+            inset: 0;
+            z-index: 0;
+        }
+
+        canvas {
+            display: block;
+        }
+
+        #hud {
+            position: fixed;
+            inset: 0;
+            z-index: 10;
+            pointer-events: none;
+        }
+
+        /* ── Title bar ──────────────────────────────────── */
+        #title-bar {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            padding: 12px 20px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            background: linear-gradient(to bottom, rgba(6, 13, 24, 0.95), transparent);
+        }
+
+        .t-left {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .t-title {
+            font-size: 15px;
+            font-weight: 700;
+            color: var(--ac);
+        }
+
+        .t-sub {
+            font-size: 10px;
+            color: var(--mt);
+            font-family: var(--mono);
+            letter-spacing: 1px;
+            margin-top: 1px;
+        }
+
+        .pill {
+            font-size: 11px;
+            font-family: var(--mono);
+            font-weight: 600;
+            padding: 4px 14px;
+            border-radius: 20px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .pill-green {
+            color: var(--gn);
+            background: rgba(52, 211, 153, .1);
+            border: 1px solid rgba(52, 211, 153, .3);
+        }
+
+        .pill-blue {
+            color: var(--ac);
+            background: rgba(56, 189, 248, .1);
+            border: 1px solid rgba(56, 189, 248, .25);
+        }
+
+        .dot {
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            background: currentColor;
+            animation: blink 1.2s ease infinite;
+        }
+
+        @keyframes blink {
+
+            0%,
+            100% {
+                opacity: 1
+            }
+
+            50% {
+                opacity: .25
+            }
+        }
+
+        /* ── Panels ─────────────────────────────────────── */
+        .panel {
+            position: absolute;
+            background: var(--pb);
+            border: 1px solid var(--bdr);
+            border-radius: 12px;
+            padding: 12px 14px;
+            backdrop-filter: blur(18px);
+        }
+
+        .ptitle {
+            font-size: 9px;
+            font-family: var(--mono);
+            font-weight: 600;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            color: var(--ac);
+            margin-bottom: 10px;
+            padding-bottom: 6px;
+            border-bottom: 1px solid var(--bdr);
+        }
+
+        .row {
+            display: flex;
+            justify-content: space-between;
+            align-items: baseline;
+            margin-bottom: 5px;
+        }
+
+        .lbl {
+            font-size: 10px;
+            color: var(--mt);
+            font-family: var(--mono);
+        }
+
+        .val {
+            font-size: 11px;
+            font-family: var(--mono);
+            font-weight: 600;
+            color: var(--tx);
+        }
+
+        .val.ac {
+            color: var(--ac);
+        }
+
+        .val.gn {
+            color: var(--gn);
+        }
+
+        .val.yw {
+            color: var(--yw);
+        }
+
+        .val.rd {
+            color: var(--rd);
+        }
+
+        /* ── Left: Telemetry ────────────────────────────── */
+        #p-telem {
+            top: 62px;
+            left: 14px;
+            width: 196px;
+        }
+
+        .telem-block {
+            margin-bottom: 10px;
+        }
+
+        .tblock-title {
+            font-size: 9px;
+            font-family: var(--mono);
+            color: var(--ac2);
+            letter-spacing: 1px;
+            text-transform: uppercase;
+            margin-bottom: 4px;
+        }
+
+        .xyz-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr;
+            gap: 4px;
+            margin-bottom: 3px;
+        }
+
+        .xyz-cell {
+            text-align: center;
+            background: rgba(56, 189, 248, .04);
+            border: 1px solid rgba(56, 189, 248, .1);
+            border-radius: 5px;
+            padding: 3px 4px;
+        }
+
+        .xyz-lbl {
+            font-size: 8px;
+            color: var(--mt);
+            font-family: var(--mono);
+        }
+
+        .xyz-val {
+            font-size: 11px;
+            font-family: var(--mono);
+            color: var(--tx);
+            font-weight: 600;
+        }
+
+        /* ── Right: Motor thrusts ───────────────────────── */
+        #p-motors {
+            top: 62px;
+            right: 14px;
+            width: 200px;
+        }
+
+        .motor-row {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 8px;
+        }
+
+        .motor-label {
+            font-size: 10px;
+            font-family: var(--mono);
+            color: var(--mt);
+            width: 28px;
+        }
+
+        .motor-bar-bg {
+            flex: 1;
+            height: 6px;
+            background: rgba(56, 189, 248, .1);
+            border-radius: 3px;
+            overflow: hidden;
+        }
+
+        .motor-bar {
+            height: 100%;
+            width: 0%;
+            border-radius: 3px;
+            background: var(--gn);
+            transition: width 0.05s, background 0.05s;
+        }
+
+        .motor-val {
+            font-size: 10px;
+            font-family: var(--mono);
+            color: var(--tx);
+            width: 44px;
+            text-align: right;
+        }
+
+        /* ── Center-top: armed + quick stats ───────────── */
+        #p-quick {
+            top: 62px;
+            left: 50%;
+            transform: translateX(-50%);
+            text-align: center;
+            min-width: 220px;
+        }
+
+        #armed-status {
+            font-size: 13px;
+            font-weight: 700;
+            font-family: var(--mono);
+            color: var(--rd);
+        }
+
+        #hover-badge {
+            font-size: 10px;
+            font-family: var(--mono);
+            color: var(--mt);
+            margin-top: 3px;
+        }
+
+        #cam-wrap {
+            font-size: 10px;
+            font-family: var(--mono);
+            color: var(--ac2);
+            margin-top: 3px;
+        }
+
+        #cam-mode {
+            color: var(--ac);
+            font-weight: 600;
+        }
+
+        .quick-stats {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 6px;
+            margin-top: 10px;
+        }
+
+        .qs-cell {
+            background: rgba(56, 189, 248, .05);
+            border: 1px solid var(--bdr);
+            border-radius: 7px;
+            padding: 5px 10px;
+        }
+
+        .qs-lbl {
+            font-size: 9px;
+            color: var(--mt);
+            font-family: var(--mono);
+        }
+
+        .qs-val {
+            font-size: 14px;
+            font-family: var(--mono);
+            font-weight: 600;
+            color: var(--ac);
+        }
+
+        /* ── Bottom-left: Artificial Horizon ────────────── */
+        #p-ah {
+            bottom: 90px;
+            left: 14px;
+            padding: 10px;
+        }
+
+        #ah-canvas {
+            display: block;
+            border-radius: 50%;
+            border: 2px solid var(--bdr);
+        }
+
+        /* ── Bottom-right: Angular velocity ─────────────── */
+        #p-attitude {
+            bottom: 90px;
+            right: 14px;
+            width: 196px;
+        }
+
+        /* ── Bottom-center: Controls legend + FPS ────────── */
+        #p-controls {
+            bottom: 24px;
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 10px;
+            font-family: var(--mono);
+            color: var(--mt);
+            text-align: center;
+            white-space: nowrap;
+            min-width: 580px;
+        }
+
+        #p-controls span {
+            color: var(--ac);
+            font-weight: 600;
+        }
+
+        .ctrl-sep {
+            margin: 0 6px;
+            opacity: .3;
+        }
+
+        #fps-row {
+            margin-top: 4px;
+            color: var(--mt);
+        }
+
+        #fps-row b {
+            color: var(--gn);
+        }
+
+        /* ── Specs strip ─────────────────────────────────── */
+        #p-specs {
+            bottom: 14px;
+            left: 14px;
+            display: flex;
+            gap: 12px;
+            background: none;
+            border: none;
+            padding: 0;
+        }
+
+        .spec-tag {
+            font-size: 9px;
+            font-family: var(--mono);
+            color: var(--mt);
+            background: var(--pb);
+            border: 1px solid var(--bdr);
+            border-radius: 8px;
+            padding: 3px 10px;
+        }
+
+        .spec-tag b {
+            color: var(--ac);
+        }
+    </style>
+</head>
+
+<body>
+
+    <div id="canvas-wrap"></div>
+
+    <div id="hud">
+
+        <!-- Title -->
+        <div id="title-bar">
+            <div class="t-left">
+                <div>
+                    <div class="t-title">Quadcopter Drone Simulation</div>
+                    <div class="t-sub">X-FRAME · 450MM · 1.4KG · 4×15N MOTORS · 10" PROPS</div>
+                </div>
+            </div>
+            <div style="display:flex;gap:10px">
+                <div class="pill pill-blue">📐 Rigid Body Physics</div>
+                <div class="pill pill-green">
+                    <div class="dot"></div>60 Hz
+                </div>
+            </div>
+        </div>
+
+        <!-- Left: Telemetry -->
+        <div class="panel" id="p-telem">
+            <div class="ptitle">Telemetry</div>
+
+            <div class="telem-block">
+                <div class="tblock-title">Position (m)</div>
+                <div class="xyz-row">
+                    <div class="xyz-cell">
+                        <div class="xyz-lbl">X</div>
+                        <div class="xyz-val" id="hud-px">0.00</div>
+                    </div>
+                    <div class="xyz-cell">
+                        <div class="xyz-lbl">Y</div>
+                        <div class="xyz-val" id="hud-py">0.00</div>
+                    </div>
+                    <div class="xyz-cell">
+                        <div class="xyz-lbl">Z</div>
+                        <div class="xyz-val" id="hud-pz">0.00</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="telem-block">
+                <div class="tblock-title">Velocity (m/s)</div>
+                <div class="xyz-row">
+                    <div class="xyz-cell">
+                        <div class="xyz-lbl">Vx</div>
+                        <div class="xyz-val" id="hud-vx">0.00</div>
+                    </div>
+                    <div class="xyz-cell">
+                        <div class="xyz-lbl">Vy</div>
+                        <div class="xyz-val" id="hud-vy">0.00</div>
+                    </div>
+                    <div class="xyz-cell">
+                        <div class="xyz-lbl">Vz</div>
+                        <div class="xyz-val" id="hud-vz">0.00</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="telem-block">
+                <div class="tblock-title">Acceleration (m/s²)</div>
+                <div class="xyz-row">
+                    <div class="xyz-cell">
+                        <div class="xyz-lbl">Ax</div>
+                        <div class="xyz-val" id="hud-ax">0.00</div>
+                    </div>
+                    <div class="xyz-cell">
+                        <div class="xyz-lbl">Ay</div>
+                        <div class="xyz-val" id="hud-ay">0.00</div>
+                    </div>
+                    <div class="xyz-cell">
+                        <div class="xyz-lbl">Az</div>
+                        <div class="xyz-val" id="hud-az">0.00</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="telem-block">
+                <div class="tblock-title">Orientation (deg)</div>
+                <div class="xyz-row">
+                    <div class="xyz-cell">
+                        <div class="xyz-lbl">Roll</div>
+                        <div class="xyz-val" id="hud-roll">0°</div>
+                    </div>
+                    <div class="xyz-cell">
+                        <div class="xyz-lbl">Pitch</div>
+                        <div class="xyz-val" id="hud-pitch">0°</div>
+                    </div>
+                    <div class="xyz-cell">
+                        <div class="xyz-lbl">Yaw</div>
+                        <div class="xyz-val" id="hud-yaw">0°</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="telem-block">
+                <div class="tblock-title">Angular Velocity (rad/s)</div>
+                <div class="xyz-row">
+                    <div class="xyz-cell">
+                        <div class="xyz-lbl">ωx</div>
+                        <div class="xyz-val" id="hud-wx">0.000</div>
+                    </div>
+                    <div class="xyz-cell">
+                        <div class="xyz-lbl">ωy</div>
+                        <div class="xyz-val" id="hud-wy">0.000</div>
+                    </div>
+                    <div class="xyz-cell">
+                        <div class="xyz-lbl">ωz</div>
+                        <div class="xyz-val" id="hud-wz">0.000</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Center-top: Status + quick stats -->
+        <div class="panel" id="p-quick">
+            <div id="armed-status">🔴 DISARMED</div>
+            <div id="hover-badge">⚪ HOLD ALT OFF</div>
+            <div id="cam-wrap">CAM: <span id="cam-mode">FOLLOW</span></div>
+            <div class="quick-stats">
+                <div class="qs-cell">
+                    <div class="qs-lbl">Altitude</div>
+                    <div class="qs-val" id="hud-alt">0.00 m</div>
+                </div>
+                <div class="qs-cell">
+                    <div class="qs-lbl">Speed</div>
+                    <div class="qs-val" id="hud-speed">0.0 km/h</div>
+                </div>
+                <div class="qs-cell">
+                    <div class="qs-lbl">Total Thrust</div>
+                    <div class="qs-val" id="hud-total-t">0.0 N</div>
+                </div>
+                <div class="qs-cell">
+                    <div class="qs-lbl">Hover T</div>
+                    <div class="qs-val" style="color:var(--yw)">3.43 N</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Right: Motor thrusts -->
+        <div class="panel" id="p-motors">
+            <div class="ptitle">Motor Thrusts [0 – 15 N]</div>
+
+            <div class="motor-row">
+                <div class="motor-label">M1 FR</div>
+                <div class="motor-bar-bg">
+                    <div class="motor-bar" id="bar-m1"></div>
+                </div>
+                <div class="motor-val val" id="hud-m1">0.0 N</div>
+            </div>
+            <div class="motor-row">
+                <div class="motor-label">M2 FL</div>
+                <div class="motor-bar-bg">
+                    <div class="motor-bar" id="bar-m2"></div>
+                </div>
+                <div class="motor-val val" id="hud-m2">0.0 N</div>
+            </div>
+            <div class="motor-row">
+                <div class="motor-label">M3 RL</div>
+                <div class="motor-bar-bg">
+                    <div class="motor-bar" id="bar-m3"></div>
+                </div>
+                <div class="motor-val val" id="hud-m3">0.0 N</div>
+            </div>
+            <div class="motor-row">
+                <div class="motor-label">M4 RR</div>
+                <div class="motor-bar-bg">
+                    <div class="motor-bar" id="bar-m4"></div>
+                </div>
+                <div class="motor-val val" id="hud-m4">0.0 N</div>
+            </div>
+
+            <div style="margin-top:10px; padding-top:8px; border-top: 1px solid var(--bdr)">
+                <div class="ptitle" style="margin-bottom:6px">Physics Specs</div>
+                <div class="row"><span class="lbl">Mass</span><span class="val ac">1.4 kg</span></div>
+                <div class="row"><span class="lbl">Ixx/Izz</span><span class="val">0.0277 kg·m²</span></div>
+                <div class="row"><span class="lbl">Iyy (yaw)</span><span class="val">0.0522 kg·m²</span></div>
+                <div class="row"><span class="lbl">Arm length</span><span class="val">225 mm</span></div>
+                <div class="row"><span class="lbl">Drag κ</span><span class="val gn">0.016 N·m/N</span></div>
+            </div>
+        </div>
+
+        <!-- Bottom-left: Artificial Horizon -->
+        <div class="panel" id="p-ah">
+            <div class="ptitle">Attitude</div>
+            <canvas id="ah-canvas" width="120" height="120"></canvas>
+        </div>
+
+        <!-- Bottom-right: misc attitude readout -->
+        <div class="panel" id="p-attitude">
+            <div class="ptitle">Flight Status</div>
+            <div class="row"><span class="lbl">FPS</span><span class="val gn" id="hud-fps">60</span></div>
+            <div class="row"><span class="lbl">Steps</span><span class="val" id="hud-steps">0</span></div>
+            <div style="height:1px;background:var(--bdr);margin:8px 0"></div>
+            <div class="row"><span class="lbl">Hover T (per M)</span><span class="val yw">3.43 N</span></div>
+            <div class="row"><span class="lbl">Max T (per M)</span><span class="val rd">15.0 N</span></div>
+            <div class="row"><span class="lbl">g</span><span class="val">9.81 m/s²</span></div>
+            <div class="row"><span class="lbl">T/W ratio (max)</span><span class="val ac">4.37</span></div>
+            <div style="height:1px;background:var(--bdr);margin:8px 0"></div>
+            <div class="row"><span class="lbl">Motor lag τ</span><span class="val">50 ms</span></div>
+            <div class="row"><span class="lbl">Prop dia.</span><span class="val">10 in (254mm)</span></div>
+        </div>
+
+        <!-- Bottom center: Controls legend -->
+        <div id="p-controls">
+            <span>SPACE</span> ARM/DISARM
+            <span class="ctrl-sep">·</span>
+            <span>W/S</span> THROTTLE
+            <span class="ctrl-sep">·</span>
+            <span>↑↓</span> PITCH
+            <span class="ctrl-sep">·</span>
+            <span>←→</span> ROLL
+            <span class="ctrl-sep">·</span>
+            <span>Q/E</span> YAW
+            <span class="ctrl-sep">·</span>
+            <span>H</span> HOLD ALT
+            <span class="ctrl-sep">·</span>
+            <span>C</span> CAM
+            <span class="ctrl-sep">·</span>
+            <span>R</span> RESET
+            <div id="fps-row">
+                Right-drag = orbit camera &nbsp;|&nbsp; Scroll = zoom
+            </div>
+        </div>
+
+        <!-- Specs strip -->
+        <div id="p-specs">
+            <div class="spec-tag">Frame: <b>X450</b></div>
+            <div class="spec-tag">Motors: <b>4 × 15N</b></div>
+            <div class="spec-tag">Props: <b>10"</b></div>
+            <div class="spec-tag">Body: <b>180×180×70mm</b></div>
+            <div class="spec-tag">window.DRONE.state</div>
+        </div>
+
+    </div>
+
+    <!-- Three.js from CDN -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <!-- Cannon.js (local) -->
+    <script src="config/cannon.js"></script>
+    <!-- Drone modules -->
+    <script src="drone/drone.js"></script>
+    <script src="drone/drone-scene.js"></script>
+    <script src="training/drone-main.js"></script>
+</body>
+
+</html>

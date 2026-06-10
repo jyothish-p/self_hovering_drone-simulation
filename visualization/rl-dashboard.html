@@ -1,0 +1,925 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DQN Drone — Real-Time Dashboard</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700;900&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg: #070d1a;
+            --panel: #0c1526;
+            --panel2: #0f1a30;
+            --border: #1a2d4a;
+            --text: #e2e8f0;
+            --muted: #4a6080;
+            --accent: #38bdf8;
+            --green: #10b981;
+            --yellow: #f59e0b;
+            --red: #ef4444;
+            --purple: #a855f7;
+            --orange: #f97316;
+            --teal: #2dd4bf;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background: var(--bg);
+            background-image: radial-gradient(ellipse at 20% 0%, #0a1f3d22 0%, transparent 60%),
+                radial-gradient(ellipse at 80% 100%, #1a0a3d22 0%, transparent 60%);
+            color: var(--text);
+            min-height: 100vh;
+            padding: 10px;
+            overflow-x: hidden;
+        }
+
+        /* ── Header ───────────────────────────────────────────────────────────────── */
+        header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 10px 18px;
+            background: var(--panel);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            margin-bottom: 10px;
+            backdrop-filter: blur(8px);
+        }
+
+        .hdr-title {
+            font-size: 15px;
+            font-weight: 800;
+            background: linear-gradient(135deg, #38bdf8 0%, #818cf8 60%, #a78bfa 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            letter-spacing: -0.3px;
+        }
+
+        .hdr-meta {
+            display: flex;
+            gap: 18px;
+            font-size: 11px;
+            color: var(--muted);
+            align-items: center;
+        }
+
+        .hdr-meta b {
+            color: var(--text);
+            font-weight: 600;
+        }
+
+        .live-dot {
+            width: 7px;
+            height: 7px;
+            background: var(--green);
+            border-radius: 50%;
+            animation: livePulse 1.6s ease infinite;
+            box-shadow: 0 0 6px var(--green);
+        }
+
+        @keyframes livePulse {
+
+            0%,
+            100% {
+                opacity: 1;
+                transform: scale(1);
+            }
+
+            50% {
+                opacity: 0.5;
+                transform: scale(0.75);
+            }
+        }
+
+        /* ── Grid ─────────────────────────────────────────────────────────────────── */
+        .grid {
+            display: grid;
+            grid-template-columns: 210px 1fr 1fr;
+            grid-template-rows: 170px 195px 195px;
+            gap: 10px;
+        }
+
+        /* ── Panel base ───────────────────────────────────────────────────────────── */
+        .panel {
+            background: var(--panel);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 10px 14px;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .panel-title {
+            font-size: 9px;
+            text-transform: uppercase;
+            letter-spacing: 1.2px;
+            color: var(--muted);
+            font-weight: 700;
+            margin-bottom: 8px;
+            flex-shrink: 0;
+        }
+
+        /* ── Stability panel ──────────────────────────────────────────────────────── */
+        .stab-panel {
+            grid-row: span 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 4px;
+        }
+
+        .stab-ring {
+            position: relative;
+            width: 78px;
+            height: 78px;
+        }
+
+        .stab-ring svg {
+            transform: rotate(-90deg);
+        }
+
+        .stab-arc-bg {
+            stroke: #1a2742;
+        }
+
+        .stab-arc {
+            stroke-dasharray: 220;
+            stroke-dashoffset: 0;
+            transition: stroke 0.4s, stroke-dashoffset 0.4s;
+        }
+
+        .stab-inner {
+            position: absolute;
+            inset: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 1px;
+        }
+
+        .stab-emoji {
+            font-size: 22px;
+            line-height: 1;
+        }
+
+        .stab-pct {
+            font-size: 11px;
+            font-weight: 700;
+            letter-spacing: -0.5px;
+        }
+
+        .stab-name {
+            font-size: 11px;
+            font-weight: 800;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+        }
+
+        .stab-name.stable {
+            color: var(--green);
+        }
+
+        .stab-name.learning {
+            color: var(--yellow);
+        }
+
+        .stab-name.unstable {
+            color: var(--red);
+        }
+
+        .stab-detail {
+            font-size: 9.5px;
+            color: var(--muted);
+            text-align: center;
+            line-height: 1.4;
+        }
+
+        /* ── Stats grid ───────────────────────────────────────────────────────────── */
+        .stats-panel {
+            grid-column: span 2;
+        }
+
+        .stat-grid {
+            display: grid;
+            grid-template-columns: repeat(6, 1fr);
+            gap: 6px;
+            height: calc(100% - 22px);
+        }
+
+        .stat-item {
+            background: var(--panel2);
+            border-radius: 8px;
+            padding: 7px 10px;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+        }
+
+        .stat-key {
+            font-size: 8.5px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: var(--muted);
+            font-weight: 600;
+        }
+
+        .stat-val {
+            font-size: 17px;
+            font-weight: 800;
+            color: var(--accent);
+            font-variant-numeric: tabular-nums;
+            line-height: 1.1;
+        }
+
+        .stat-val.good {
+            color: var(--green);
+        }
+
+        .stat-val.warn {
+            color: var(--yellow);
+        }
+
+        .stat-val.bad {
+            color: var(--red);
+        }
+
+        /* ── Charts ───────────────────────────────────────────────────────────────── */
+        .chart-panel {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .chart-canvas-wrap {
+            flex: 1;
+            position: relative;
+            min-height: 0;
+        }
+
+        .chart-canvas-wrap canvas {
+            position: absolute;
+            inset: 0;
+            width: 100%;
+            height: 100%;
+            border-radius: 6px;
+        }
+
+        /* ── Motor thrusts ────────────────────────────────────────────────────────── */
+        .motor-row {
+            display: flex;
+            align-items: center;
+            gap: 7px;
+            margin-bottom: 8px;
+        }
+
+        .motor-row:last-child {
+            margin-bottom: 0;
+        }
+
+        .motor-lbl {
+            font-size: 9px;
+            color: var(--muted);
+            width: 26px;
+            flex-shrink: 0;
+            font-weight: 700;
+        }
+
+        .motor-track {
+            flex: 1;
+            height: 13px;
+            background: #0a1526;
+            border-radius: 7px;
+            overflow: hidden;
+            border: 1px solid var(--border);
+        }
+
+        .motor-fill {
+            height: 100%;
+            border-radius: 7px;
+            transition: width 0.08s ease;
+        }
+
+        .motor-val {
+            font-size: 10px;
+            width: 32px;
+            text-align: right;
+            font-variant-numeric: tabular-nums;
+            color: var(--text);
+            font-weight: 600;
+        }
+
+        /* ── Position maps ────────────────────────────────────────────────────────── */
+        .maps-wrap {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 7px;
+            flex: 1;
+            min-height: 0;
+        }
+
+        .map-box {
+            position: relative;
+            background: var(--panel2);
+            border-radius: 8px;
+            overflow: hidden;
+            border: 1px solid var(--border);
+        }
+
+        .map-box canvas {
+            position: absolute;
+            inset: 0;
+            width: 100%;
+            height: 100%;
+        }
+
+        .map-lbl {
+            position: absolute;
+            top: 5px;
+            left: 7px;
+            font-size: 8.5px;
+            color: var(--muted);
+            text-transform: uppercase;
+            letter-spacing: 0.6px;
+            z-index: 2;
+            pointer-events: none;
+        }
+
+        /* ── Status bar ───────────────────────────────────────────────────────────── */
+        .status-bar {
+            display: flex;
+            gap: 18px;
+            align-items: center;
+            flex-wrap: wrap;
+            padding: 7px 14px;
+            background: var(--panel);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            margin-top: 10px;
+            font-size: 10.5px;
+            color: var(--muted);
+        }
+
+        .status-bar b {
+            color: var(--text);
+            font-weight: 600;
+            font-variant-numeric: tabular-nums;
+        }
+
+        .status-bar .link {
+            margin-left: auto;
+            color: var(--accent);
+            text-decoration: none;
+            font-size: 10px;
+        }
+
+        /* ── No-data overlay ─────────────────────────────────────────────────────── */
+        #no-data {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: #070d1add;
+            align-items: center;
+            justify-content: center;
+            z-index: 100;
+        }
+
+        #no-data.show {
+            display: flex;
+        }
+
+        .no-data-box {
+            background: var(--panel);
+            border: 1px solid var(--border);
+            border-radius: 18px;
+            padding: 36px 52px;
+            text-align: center;
+        }
+
+        .no-data-box h2 {
+            font-size: 42px;
+            margin-bottom: 12px;
+        }
+
+        .no-data-box p {
+            color: var(--muted);
+            font-size: 13px;
+            line-height: 1.7;
+        }
+
+        .no-data-box a {
+            color: var(--accent);
+            text-decoration: none;
+        }
+    </style>
+</head>
+
+<body>
+
+    <!-- No-data overlay (shown until first localStorage payload arrives) -->
+    <div id="no-data" class="show">
+        <div class="no-data-box">
+            <h2>📡</h2>
+            <p>Waiting for training data…<br>
+                Open <a href="http://localhost:7892/rl-training.html" target="_blank">rl-training.html</a> first,<br>
+                then return here.</p>
+        </div>
+    </div>
+
+    <!-- Header -->
+    <header>
+        <div class="hdr-title">🤖 DQN Drone — Real-Time Dashboard</div>
+        <div class="hdr-meta">
+            <div class="live-dot"></div>
+            <span>Episode <b id="h-ep">—</b></span>
+            <span>ε <b id="h-eps">—</b></span>
+            <span>Train steps <b id="h-ts">—</b></span>
+            <span>Loss <b id="h-loss">—</b></span>
+            <span>Buffer <b id="h-buf">—</b></span>
+        </div>
+    </header>
+
+    <!-- Main grid -->
+    <div class="grid">
+
+        <!-- ROW 1: Stability | Stats (span 2) -->
+        <div class="panel stab-panel">
+            <div class="panel-title" style="align-self:flex-start;width:100%">Stability</div>
+            <div class="stab-ring">
+                <svg width="78" height="78" viewBox="0 0 78 78">
+                    <circle class="stab-arc-bg" cx="39" cy="39" r="35" fill="none" stroke-width="7" />
+                    <circle class="stab-arc" id="stab-arc" cx="39" cy="39" r="35" fill="none" stroke="#10b981"
+                        stroke-width="7" stroke-linecap="round" stroke-dasharray="220" stroke-dashoffset="55" />
+                </svg>
+                <div class="stab-inner">
+                    <div class="stab-emoji" id="stab-emoji">⚡</div>
+                    <div class="stab-pct" id="stab-pct" style="color:#10b981">—</div>
+                </div>
+            </div>
+            <div class="stab-name stable" id="stab-name">STABLE</div>
+            <div class="stab-detail" id="stab-detail">—</div>
+        </div>
+
+        <div class="panel stats-panel">
+            <div class="panel-title">Live Telemetry</div>
+            <div class="stat-grid">
+                <div class="stat-item">
+                    <div class="stat-key">Altitude</div>
+                    <div class="stat-val" id="s-alt">—</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-key">Target</div>
+                    <div class="stat-val good" id="s-tgt">10 m</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-key">Speed</div>
+                    <div class="stat-val" id="s-spd">—</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-key">Ep. Reward</div>
+                    <div class="stat-val" id="s-rew">—</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-key">Roll</div>
+                    <div class="stat-val" id="s-roll">—</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-key">Pitch</div>
+                    <div class="stat-val" id="s-pitch">—</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ROW 2: Height | Reward | Motor + Position -->
+        <div class="panel chart-panel">
+            <div class="panel-title">Altitude Over Time (m)</div>
+            <div class="chart-canvas-wrap"><canvas id="c-height"></canvas></div>
+        </div>
+
+        <div class="panel chart-panel">
+            <div class="panel-title">Reward Over Time</div>
+            <div class="chart-canvas-wrap"><canvas id="c-reward"></canvas></div>
+        </div>
+
+        <div class="panel" style="display:flex;flex-direction:column;gap:8px;">
+            <div class="panel-title">Motor Thrusts (N)</div>
+            <div id="motor-section">
+                <div class="motor-row">
+                    <span class="motor-lbl">M1 FR</span>
+                    <div class="motor-track">
+                        <div class="motor-fill" id="mf0" style="background:var(--accent);width:0%"></div>
+                    </div>
+                    <span class="motor-val" id="mv0">—</span>
+                </div>
+                <div class="motor-row">
+                    <span class="motor-lbl">M2 FL</span>
+                    <div class="motor-track">
+                        <div class="motor-fill" id="mf1" style="background:var(--purple);width:0%"></div>
+                    </div>
+                    <span class="motor-val" id="mv1">—</span>
+                </div>
+                <div class="motor-row">
+                    <span class="motor-lbl">M3 RL</span>
+                    <div class="motor-track">
+                        <div class="motor-fill" id="mf2" style="background:var(--green);width:0%"></div>
+                    </div>
+                    <span class="motor-val" id="mv2">—</span>
+                </div>
+                <div class="motor-row">
+                    <span class="motor-lbl">M4 RR</span>
+                    <div class="motor-track">
+                        <div class="motor-fill" id="mf3" style="background:var(--orange);width:0%"></div>
+                    </div>
+                    <span class="motor-val" id="mv3">—</span>
+                </div>
+            </div>
+            <div style="margin-top:auto">
+                <div class="panel-title">Position (m)</div>
+                <div style="display:flex;gap:6px;font-size:11px">
+                    <div style="flex:1;text-align:center;background:var(--panel2);border-radius:6px;padding:5px 4px">
+                        <div style="font-size:8px;color:var(--muted);margin-bottom:2px">X</div>
+                        <div id="pos-x" style="font-weight:700;font-variant-numeric:tabular-nums">—</div>
+                    </div>
+                    <div style="flex:1;text-align:center;background:var(--panel2);border-radius:6px;padding:5px 4px">
+                        <div style="font-size:8px;color:var(--muted);margin-bottom:2px">Y (ALT)</div>
+                        <div id="pos-y" style="font-weight:700;color:var(--accent);font-variant-numeric:tabular-nums">—
+                        </div>
+                    </div>
+                    <div style="flex:1;text-align:center;background:var(--panel2);border-radius:6px;padding:5px 4px">
+                        <div style="font-size:8px;color:var(--muted);margin-bottom:2px">Z</div>
+                        <div id="pos-z" style="font-weight:700;font-variant-numeric:tabular-nums">—</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ROW 3: Velocity | Orientation | 3D Map -->
+        <div class="panel chart-panel">
+            <div class="panel-title">Velocity Magnitude (m/s)</div>
+            <div class="chart-canvas-wrap"><canvas id="c-velocity"></canvas></div>
+        </div>
+
+        <div class="panel chart-panel">
+            <div class="panel-title">Orientation Stability — Roll &amp; Pitch (°)</div>
+            <div class="chart-canvas-wrap"><canvas id="c-orient"></canvas></div>
+        </div>
+
+        <div class="panel" style="display:flex;flex-direction:column;">
+            <div class="panel-title">3D Position Map</div>
+            <div class="maps-wrap">
+                <div class="map-box">
+                    <span class="map-lbl">Side · X vs Y</span>
+                    <canvas id="c-side"></canvas>
+                </div>
+                <div class="map-box">
+                    <span class="map-lbl">Top · X vs Z</span>
+                    <canvas id="c-top"></canvas>
+                </div>
+            </div>
+        </div>
+
+    </div><!-- /grid -->
+
+    <!-- Status bar -->
+    <div class="status-bar">
+        <span>Roll <b id="sb-roll">—</b>°</span>
+        <span>Pitch <b id="sb-pitch">—</b>°</span>
+        <span>Yaw <b id="sb-yaw">—</b>°</span>
+        <span>ω <b id="sb-angspd">—</b> rad/s</span>
+        <span>Vx <b id="sb-vx">—</b></span>
+        <span>Vy <b id="sb-vy">—</b></span>
+        <span>Vz <b id="sb-vz">—</b></span>
+        <span>Good pool <b id="sb-good">—</b></span>
+        <a class="link" href="http://localhost:7892/rl-training.html" target="_blank">↗ Open Training</a>
+    </div>
+
+    <script>
+        'use strict';
+
+        // ── Config ────────────────────────────────────────────────────────────────────
+        const MAX_PTS     = 300;
+        const MAP_PTS     = 400;
+        const POLL_KEY    = 'rl_telemetry';
+        const MAX_THRUST  = 15;
+        const STALE_MS    = 2500;
+
+        // ── Helpers ───────────────────────────────────────────────────────────────────
+        const $ = id => document.getElementById(id);
+        function push(arr, val, max) { arr.push(val); if (arr.length > max) arr.shift(); }
+        const fmt = (v, d = 2) => (typeof v === 'number' ? v.toFixed(d) : '—');
+
+        // ── History buffers ───────────────────────────────────────────────────────────
+        const H = { height: [], reward: [], velocity: [], roll: [], pitch: [], posXY: [], posXZ: [] };
+
+        // ── DATA BUFFER — the ONLY place async handlers write to ─────────────────────
+        //    RAF loop reads from here. Zero DOM writes outside RAF.
+        let buf = null;
+        let bufChanged = false;
+
+        // ── Connection state ──────────────────────────────────────────────────────────
+        let firstData    = false;
+        let lastDataTime = 0;
+        const liveDot    = document.querySelector('.live-dot');
+
+        function ingest(tel) {
+            if (!tel || !tel.t) return;
+            buf        = tel;
+            bufChanged = true;
+            lastDataTime = Date.now();
+            if (!firstData) {
+                firstData = true;
+                $('no-data').classList.remove('show');
+            }
+        }
+
+        // ── Transport 1: BroadcastChannel (per-frame push from training tab) ──────────
+        try {
+            const bc = new BroadcastChannel('rl_telemetry_channel');
+            bc.onmessage = e => ingest(e.data);
+        } catch (_) {}
+
+        // ── Transport 2: storage event ────────────────────────────────────────────────
+        window.addEventListener('storage', e => {
+            if (e.key === POLL_KEY && e.newValue) {
+                try { ingest(JSON.parse(e.newValue)); } catch (_) {}
+            }
+        });
+
+        // ── Transport 3: setInterval polling fallback (works in background tab) ───────
+        let lastTs = 0;
+        setInterval(() => {
+            try {
+                const raw = localStorage.getItem(POLL_KEY);
+                if (!raw) return;
+                const tel = JSON.parse(raw);
+                if (tel && tel.t !== lastTs) { lastTs = tel.t; ingest(tel); }
+            } catch (_) {}
+        }, 16);
+
+        // ── Chart class ───────────────────────────────────────────────────────────────
+        class SparkChart {
+            constructor(id, opts = {}) {
+                this.cv  = $(id);
+                this.ctx = this.cv.getContext('2d');
+                this.o   = { color: '#38bdf8', color2: null, unit: '', targetLine: null, zeroLine: false, ...opts };
+            }
+            _fit() {
+                const r = this.cv.parentElement.getBoundingClientRect();
+                if (this.cv.width !== Math.round(r.width))  this.cv.width  = Math.round(r.width);
+                if (this.cv.height !== Math.round(r.height)) this.cv.height = Math.round(r.height);
+            }
+            draw(data, data2 = null) {
+                this._fit();
+                const ctx = this.ctx, W = this.cv.width, H = this.cv.height;
+                const p = { t: 20, r: 8, b: 24, l: 42 };
+                const iW = W - p.l - p.r, iH = H - p.t - p.b;
+                ctx.clearRect(0, 0, W, H);
+                const all = data2 ? [...data, ...data2] : data;
+                if (all.length < 2) {
+                    ctx.fillStyle = '#4a6080'; ctx.font = '11px Inter'; ctx.textAlign = 'center';
+                    ctx.fillText('Collecting…', W / 2, H / 2); return;
+                }
+                let lo = this.o.minVal ?? Math.min(...all);
+                let hi = this.o.maxVal ?? Math.max(...all);
+                if (this.o.targetLine != null) { lo = Math.min(lo, this.o.targetLine); hi = Math.max(hi, this.o.targetLine); }
+                if (this.o.zeroLine) { lo = Math.min(lo, 0); hi = Math.max(hi, 0); }
+                const span = hi - lo || 1, mg = span * 0.08;
+                lo -= mg; hi += mg; const rng = hi - lo;
+                const toX = i => p.l + (i / (MAX_PTS - 1)) * iW;
+                const toY = v => p.t + (1 - (v - lo) / rng) * iH;
+                const clamp = v => Math.max(lo, Math.min(hi, v));
+                ctx.strokeStyle = '#1a2d4a'; ctx.lineWidth = 1;
+                for (let g = 0; g <= 4; g++) {
+                    const v = lo + rng * g / 4, y = toY(v);
+                    ctx.beginPath(); ctx.moveTo(p.l, y); ctx.lineTo(W - p.r, y); ctx.stroke();
+                    ctx.fillStyle = '#4a6080'; ctx.font = '9px Inter'; ctx.textAlign = 'right';
+                    ctx.fillText(v.toFixed(1), p.l - 4, y + 3);
+                }
+                if (this.o.targetLine != null) {
+                    const ty = toY(this.o.targetLine);
+                    ctx.save(); ctx.strokeStyle = '#10b98180'; ctx.lineWidth = 1.5; ctx.setLineDash([4, 4]);
+                    ctx.beginPath(); ctx.moveTo(p.l, ty); ctx.lineTo(W - p.r, ty); ctx.stroke(); ctx.setLineDash([]);
+                    ctx.fillStyle = '#10b981aa'; ctx.font = '9px Inter'; ctx.textAlign = 'left';
+                    ctx.fillText('target', p.l + 4, ty - 3); ctx.restore();
+                }
+                if (this.o.zeroLine) {
+                    const zy = toY(0); ctx.strokeStyle = '#ffffff20'; ctx.lineWidth = 1;
+                    ctx.setLineDash([2, 4]); ctx.beginPath(); ctx.moveTo(p.l, zy); ctx.lineTo(W - p.r, zy); ctx.stroke(); ctx.setLineDash([]);
+                }
+                const drawSeries = (arr, col, filled) => {
+                    if (arr.length < 2) return;
+                    const off = MAX_PTS - arr.length;
+                    if (filled) {
+                        const g = ctx.createLinearGradient(0, p.t, 0, H - p.b);
+                        g.addColorStop(0, col + '50'); g.addColorStop(1, col + '08');
+                        ctx.beginPath();
+                        arr.forEach((v, i) => { const x = toX(i + off), y = toY(clamp(v)); i ? ctx.lineTo(x, y) : ctx.moveTo(x, y); });
+                        ctx.lineTo(toX(MAX_PTS - 1), H - p.b); ctx.lineTo(toX(off), H - p.b);
+                        ctx.closePath(); ctx.fillStyle = g; ctx.fill();
+                    }
+                    ctx.beginPath();
+                    arr.forEach((v, i) => { const x = toX(i + off), y = toY(clamp(v)); i ? ctx.lineTo(x, y) : ctx.moveTo(x, y); });
+                    ctx.strokeStyle = col; ctx.lineWidth = 1.8; ctx.lineJoin = 'round'; ctx.stroke();
+                    const last = arr[arr.length - 1];
+                    ctx.beginPath(); ctx.arc(toX(MAX_PTS - 1), toY(clamp(last)), 3.5, 0, Math.PI * 2);
+                    ctx.fillStyle = col; ctx.fill();
+                };
+                drawSeries(data, this.o.color, true);
+                if (data2) drawSeries(data2, this.o.color2, false);
+                const last = data[data.length - 1], last2 = data2 ? data2[data2.length - 1] : null;
+                ctx.fillStyle = '#4a6080'; ctx.font = 'bold 9.5px Inter'; ctx.textAlign = 'left'; ctx.fillText(this.o.label || '', p.l + 3, p.t - 5);
+                ctx.fillStyle = this.o.color; ctx.textAlign = 'right'; ctx.font = 'bold 11px Inter';
+                ctx.fillText(fmt(last) + this.o.unit, W - p.r, p.t - 5);
+                if (data2 && this.o.label2) {
+                    ctx.fillStyle = '#4a6080'; ctx.textAlign = 'left'; ctx.font = 'bold 9.5px Inter'; ctx.fillText(this.o.label2, p.l + 60, p.t - 5);
+                    ctx.fillStyle = this.o.color2; ctx.textAlign = 'center'; ctx.font = 'bold 11px Inter';
+                    ctx.fillText(fmt(last2) + this.o.unit, W * 0.7, p.t - 5);
+                }
+            }
+        }
+
+        const charts = {
+            height:   new SparkChart('c-height',   { color: '#38bdf8', label: 'Height',  unit: ' m',  targetLine: 10, minVal: 0, maxVal: 20 }),
+            reward:   new SparkChart('c-reward',   { color: '#22d3ee', label: 'Reward',  unit: '',    zeroLine: true }),
+            velocity: new SparkChart('c-velocity', { color: '#a855f7', label: 'Speed',   unit: ' m/s', minVal: 0 }),
+            orient:   new SparkChart('c-orient',   { color: '#f59e0b', color2: '#f97316', label: 'Roll', label2: 'Pitch', unit: '°', zeroLine: true }),
+        };
+
+        // ── Position map ──────────────────────────────────────────────────────────────
+        function drawMap(id, pts, ax, ay, tY, lX, lY, tLbl) {
+            const c = $(id), r = c.parentElement.getBoundingClientRect();
+            c.width = Math.round(r.width); c.height = Math.round(r.height);
+            const ctx = c.getContext('2d'), W = c.width, Hc = c.height, pad = 20;
+            ctx.clearRect(0, 0, W, Hc);
+            ctx.strokeStyle = '#1a2d4a55'; ctx.lineWidth = 1;
+            for (let i = 0; i <= 4; i++) {
+                ctx.beginPath(); ctx.moveTo(pad + (W-2*pad)*i/4, pad); ctx.lineTo(pad + (W-2*pad)*i/4, Hc-pad); ctx.stroke();
+                ctx.beginPath(); ctx.moveTo(pad, pad + (Hc-2*pad)*i/4); ctx.lineTo(W-pad, pad + (Hc-2*pad)*i/4); ctx.stroke();
+            }
+            if (pts.length < 2) { ctx.fillStyle='#4a6080'; ctx.font='10px Inter'; ctx.textAlign='center'; ctx.fillText('No data', W/2, Hc/2); return; }
+            const xs = pts.map(p=>p[ax]), ys = pts.map(p=>p[ay]);
+            const xLo=Math.min(...xs)-1, xHi=Math.max(...xs)+1, yLo=Math.min(...ys,(tY||0)-2)-1, yHi=Math.max(...ys,(tY||0)+2)+1;
+            const mX = v => pad + ((v-xLo)/(xHi-xLo||1))*(W-2*pad);
+            const mY = v => Hc - pad - ((v-yLo)/(yHi-yLo||1))*(Hc-2*pad);
+            if (tY != null && tLbl) {
+                const ty=mY(tY); ctx.strokeStyle='#10b98160'; ctx.lineWidth=1; ctx.setLineDash([3,4]);
+                ctx.beginPath(); ctx.moveTo(pad,ty); ctx.lineTo(W-pad,ty); ctx.stroke(); ctx.setLineDash([]);
+                ctx.fillStyle='#10b98180'; ctx.font='8px Inter'; ctx.textAlign='left'; ctx.fillText(tLbl,pad+2,ty-3);
+            }
+            const n = pts.length;
+            for (let i=1; i<n; i++) {
+                const a=i/n; ctx.strokeStyle=`rgba(56,189,248,${a*0.7})`; ctx.lineWidth=1+a;
+                ctx.beginPath(); ctx.moveTo(mX(pts[i-1][ax]),mY(pts[i-1][ay])); ctx.lineTo(mX(pts[i][ax]),mY(pts[i][ay])); ctx.stroke();
+            }
+            const cur=pts[n-1];
+            ctx.beginPath(); ctx.arc(mX(cur[ax]),mY(cur[ay]),4.5,0,Math.PI*2);
+            ctx.fillStyle='#38bdf8'; ctx.fill(); ctx.strokeStyle='#ffffffaa'; ctx.lineWidth=1.5; ctx.stroke();
+            ctx.fillStyle='#4a6080'; ctx.font='8.5px Inter'; ctx.textAlign='center'; ctx.fillText(lX,W/2,Hc-3);
+            ctx.save(); ctx.translate(10,Hc/2); ctx.rotate(-Math.PI/2); ctx.fillText(lY,0,0); ctx.restore();
+        }
+
+        // ── Stability scorer ──────────────────────────────────────────────────────────
+        function stability(tel) {
+            const ae  = Math.abs(tel.pos[1] - tel.targetY);
+            const spd = Math.hypot(tel.vel[0], tel.vel[1], tel.vel[2]);
+            const tilt= Math.max(Math.abs(tel.ori[0]), Math.abs(tel.ori[1])) * 180 / Math.PI;
+            const ang = Math.hypot(tel.angVel[0], tel.angVel[1], tel.angVel[2]);
+            const sc  = (Math.max(0,100-ae*40) + Math.max(0,100-spd*15) + Math.max(0,100-tilt*3) + Math.max(0,100-ang*40)) / 4;
+            return { score: sc, state: sc>=72?'stable':sc>=38?'learning':'unstable', emoji: sc>=72?'✅':sc>=38?'🔄':'💥',
+                     detail: `alt±${ae.toFixed(2)}m  spd ${spd.toFixed(2)}m/s  tilt ${tilt.toFixed(1)}°` };
+        }
+
+        const STAB_COL = { stable: '#10b981', learning: '#f59e0b', unstable: '#ef4444' };
+        const mColors  = ['var(--accent)', 'var(--purple)', 'var(--green)', 'var(--orange)'];
+
+        // ── MASTER RAF LOOP — ALL DOM writes live here ────────────────────────────────
+        //    ingest() stores data in buf; RAF reads buf and renders everything.
+        //    Result: every DOM write is synced to the display refresh cycle = smooth 60fps.
+        let lastRender = 0;
+
+        function rafLoop(ts) {
+            requestAnimationFrame(rafLoop);
+            if (!buf) return;
+
+            const hasNew = bufChanged;
+            // Always render on new data; also re-render charts every ~33ms for smoothness
+            if (!hasNew && ts - lastRender < 33) return;
+            lastRender = ts;
+            bufChanged = false;
+
+            const tel = buf;
+            const { pos, vel, ori, angVel, thrusts, targetY } = tel;
+
+            // Update history only on new data
+            if (hasNew) {
+                push(H.height,   pos[1],                               MAX_PTS);
+                push(H.reward,   tel.epReward,                         MAX_PTS);
+                push(H.velocity, Math.hypot(vel[0],vel[1],vel[2]),    MAX_PTS);
+                push(H.roll,     ori[0] * 180 / Math.PI,               MAX_PTS);
+                push(H.pitch,    ori[1] * 180 / Math.PI,               MAX_PTS);
+                push(H.posXY,    pos,                                  MAP_PTS);
+                push(H.posXZ,    pos,                                  MAP_PTS);
+            }
+
+            const altErr  = pos[1] - targetY;
+            const speed   = Math.hypot(vel[0], vel[1], vel[2]);
+            const rollDeg = ori[0] * 180 / Math.PI;
+            const pitchDeg= ori[1] * 180 / Math.PI;
+            const yawDeg  = ori[2] * 180 / Math.PI;
+            const angSpd  = Math.hypot(angVel[0], angVel[1], angVel[2]);
+
+            // Header
+            $('h-ep').textContent   = tel.episode;
+            $('h-eps').textContent  = tel.epsilon.toFixed(4);
+            $('h-ts').textContent   = tel.trainSteps.toLocaleString();
+            $('h-loss').textContent = tel.lastLoss > 0 ? tel.lastLoss.toFixed(4) : '—';
+            $('h-buf').textContent  = tel.bufferSize.toLocaleString();
+
+            // Stability ring
+            const stab = stability(tel);
+            const sCol = STAB_COL[stab.state];
+            const arc  = $('stab-arc');
+            arc.style.stroke           = sCol;
+            arc.style.strokeDashoffset = 2 * Math.PI * 35 * (1 - stab.score / 100);
+            $('stab-emoji').textContent = stab.emoji;
+            $('stab-pct').textContent   = Math.round(stab.score) + '%';
+            $('stab-pct').style.color   = sCol;
+            const sn = $('stab-name');
+            sn.textContent = stab.state.toUpperCase();
+            sn.className   = 'stab-name ' + stab.state;
+            $('stab-detail').textContent = stab.detail;
+
+            // Stat tiles
+            const aC = Math.abs(altErr) < 0.5 ? 'good' : Math.abs(altErr) < 2 ? 'warn' : 'bad';
+            $('s-alt').textContent  = pos[1].toFixed(2) + ' m';  $('s-alt').className  = 'stat-val ' + aC;
+            $('s-tgt').textContent  = targetY + ' m';
+            $('s-spd').textContent  = speed.toFixed(2) + ' m/s';
+            $('s-rew').textContent  = tel.epReward.toFixed(1);
+            const rC = Math.abs(rollDeg)  < 5 ? 'good' : Math.abs(rollDeg)  < 15 ? 'warn' : 'bad';
+            const pC = Math.abs(pitchDeg) < 5 ? 'good' : Math.abs(pitchDeg) < 15 ? 'warn' : 'bad';
+            $('s-roll').textContent  = rollDeg.toFixed(1)  + '°';  $('s-roll').className  = 'stat-val ' + rC;
+            $('s-pitch').textContent = pitchDeg.toFixed(1) + '°';  $('s-pitch').className = 'stat-val ' + pC;
+
+            // Motor bars
+            thrusts.forEach((t, i) => {
+                const pct = Math.round((t / MAX_THRUST) * 100);
+                const col = t > 12 ? 'var(--red)' : t > 8 ? 'var(--orange)' : mColors[i];
+                $('mf' + i).style.width      = pct + '%';
+                $('mf' + i).style.background = col;
+                $('mv' + i).textContent      = t.toFixed(1);
+            });
+
+            // Position readouts
+            $('pos-x').textContent = pos[0].toFixed(2);
+            $('pos-y').textContent = pos[1].toFixed(2);
+            $('pos-z').textContent = pos[2].toFixed(2);
+
+            // Status bar
+            $('sb-roll').textContent   = rollDeg.toFixed(1);
+            $('sb-pitch').textContent  = pitchDeg.toFixed(1);
+            $('sb-yaw').textContent    = yawDeg.toFixed(1);
+            $('sb-angspd').textContent = angSpd.toFixed(3);
+            $('sb-vx').textContent     = vel[0].toFixed(2);
+            $('sb-vy').textContent     = vel[1].toFixed(2);
+            $('sb-vz').textContent     = vel[2].toFixed(2);
+            $('sb-good').textContent   = (tel.goodSize || 0).toLocaleString();
+
+            // Charts
+            charts.height.o.targetLine = targetY;
+            charts.height.draw(H.height);
+            charts.reward.draw(H.reward);
+            charts.velocity.draw(H.velocity);
+            charts.orient.draw(H.roll, H.pitch);
+
+            // Position maps
+            if (H.posXY.length >= 2) {
+                drawMap('c-side', H.posXY, 0, 1, targetY,  'X (m)', 'Y/Alt (m)', 'target');
+                drawMap('c-top',  H.posXZ, 0, 2, null,     'X (m)', 'Z (m)',      null);
+            }
+
+            // Live dot freshness
+            const age = Date.now() - lastDataTime;
+            if (age > STALE_MS) {
+                liveDot.style.background = '#4a6080';
+                liveDot.style.boxShadow  = 'none';
+            } else {
+                liveDot.style.background = 'var(--green)';
+                liveDot.style.boxShadow  = '0 0 6px var(--green)';
+            }
+        }
+
+        requestAnimationFrame(rafLoop);
+
+        // Show no-data overlay if nothing arrives in 3s
+        setTimeout(() => { if (!firstData) $('no-data').classList.add('show'); }, 3000);
+
+    </script>
+</body>
+</html>
